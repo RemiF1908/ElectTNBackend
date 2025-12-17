@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/HEAD/configuration-schema.json
+package: api
+output: api/generated.go
+generate:
+  echo-server: true      # Generate Echo server handlers
+  strict-server: true    # Generate strict server with response wrapper types
+  models: true           # Generate request/response types
+  client: true           # Generate API client with response types
+  embedded-spec: true    # Embed OpenAPI spec for documentation
+output-options:
+  skip-fmt: false        # Format generated code
+  skip-prune: false      # Remove unused types
+  nullable-type: true    # Use nullable.Nullable for better null handling
