@@ -1,0 +1,640 @@
+openapi: 3.0.3
+info:
+  title: Election Backend API
+  description: RESTful API for managing elections, candidacies, and votes
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Development server
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /auth/google:
+    get:
+      summary: Start OAuth2 flow with Google
+      operationId: getAuthGoogle
+      responses:
+        "302":
+          description: Redirect to Google OAuth
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/callback:
+    get:
+      summary: OAuth2 callback from Google
+      operationId: getAuthCallback
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: error
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: error_description
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to application after successful authentication
+          headers:
+            Location:
+              schema:
+                type: string
+              description: URL to redirect to after successful authentication
+        "400":
+          description: Invalid callback parameters or OAuth error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/logout:
+    get:
+      summary: Logout current user
+      operationId: getAuthLogout
+      security:
+        - SessionAuth: []
+      responses:
+        "302":
+          description: Redirect to application after successful authentication
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/me:
+    get:
+      summary: Get current user profile
+      operationId: getAuthMe
+      security:
+        - SessionAuth: []
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /elections:
+    get:
+      summary: List all elections
+      operationId: getElections
+      responses:
+        "200":
+          description: List of elections
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  elections:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Election"
+    post:
+      summary: Create a new election (admin only)
+      operationId: postElections
+      security:
+        - SessionAuth: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateElectionRequest"
+      responses:
+        "201":
+          description: Election created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Election"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /elections/{electionUuid}:
+    get:
+      summary: Get election details
+      operationId: getElection
+      parameters:
+        - name: electionUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Election details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Election"
+        "404":
+          description: Election not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    put:
+      summary: Update election (admin only)
+      operationId: putElection
+      security:
+        - SessionAuth: [admin]
+      parameters:
+        - name: electionUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateElectionRequest"
+      responses:
+        "200":
+          description: Election updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Election"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Election not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      summary: Delete election (admin only)
+      operationId: deleteElection
+      security:
+        - SessionAuth: [admin]
+      parameters:
+        - name: electionUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Election deleted successfully
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Election not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /elections/{electionUuid}/open:
+    post:
+      summary: Open or close an election (admin only)
+      operationId: postElectionOpen
+      security:
+        - SessionAuth: [admin]
+      parameters:
+        - name: electionUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                is_open:
+                  type: boolean
+      responses:
+        "200":
+          description: Election status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Election"
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Election not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /elections/{electionUuid}/candidacies:
+    get:
+      summary: List candidacies for an election
+      operationId: getElectionCandidacies
+      parameters:
+        - name: electionUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: List of candidacies
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  candidacies:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Candidacy"
+        "404":
+          description: Election not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      summary: Submit candidacy for an election (authenticated user)
+      operationId: postElectionCandidacy
+      security:
+        - SessionAuth: []
+      parameters:
+        - name: electionUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "201":
+          description: Candidacy submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Candidacy"
+        "400":
+          description: Cannot submit candidacy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Election not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /elections/{electionUuid}/vote:
+    post:
+      summary: Vote for a candidate in an election
+      operationId: postElectionVote
+      security:
+        - SessionAuth: []
+      parameters:
+        - name: electionUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                candidacy_uuid:
+                  type: string
+                  format: uuid
+                  description: UUID of the candidate to vote for
+      responses:
+        "201":
+          description: Vote submitted successfully
+        "400":
+          description: Cannot vote (election closed, already voted, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Election or candidacy not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /elections/{electionUuid}/results:
+    get:
+      summary: Get election results (admin only)
+      operationId: getElectionResults
+      security:
+        - SessionAuth: [admin]
+      parameters:
+        - name: electionUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Election results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElectionResults"
+        "403":
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Election not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /elections/{electionUuid}/live:
+    get:
+      summary: Get live election results (if enabled)
+      operationId: getElectionLive
+      parameters:
+        - name: electionUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Live election results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElectionResults"
+        "404":
+          description: Election not found or live results disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        is_admin:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        session_id:
+          type: string
+
+    Election:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+        description:
+          type: string
+        is_open:
+          type: boolean
+          readOnly: true
+        is_live_results:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        created_by_uuid:
+          type: string
+          format: uuid
+          readOnly: true
+
+    CreateElectionRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 1000
+        is_live_results:
+          type: boolean
+          default: false
+
+    UpdateElectionRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 1000
+        is_live_results:
+          type: boolean
+
+    Candidacy:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          readOnly: true
+        user_uuid:
+          type: string
+          format: uuid
+          readOnly: true
+        election_uuid:
+          type: string
+          format: uuid
+          readOnly: true
+        user_name:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+
+    ElectionResults:
+      type: object
+      properties:
+        election_uuid:
+          type: string
+          format: uuid
+        election_title:
+          type: string
+        total_votes:
+          type: integer
+          format: int32
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              candidacy_uuid:
+                type: string
+                format: uuid
+              candidate_name:
+                type: string
+              vote_count:
+                type: integer
+                format: int32
+              percentage:
+                type: number
+                format: float
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+
+  securitySchemes:
+    SessionAuth:
+      type: apiKey
+      in: cookie
+      name: election-session

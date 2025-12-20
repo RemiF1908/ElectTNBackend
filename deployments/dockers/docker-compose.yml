@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: elections_dev
+      POSTGRES_USER: elections_user
+      POSTGRES_PASSWORD: elections_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    build: .
+    environment:
+      APP_MODE: development
+      DATABASE_URL: postgres://elections_user:elections_password@postgres/elections_dev?sslmode=disable
+      SESSION_SECRET: dev-secret-change-in-production
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    volumes:
+      - ./:/app
+
+volumes:
+  postgres_data:
