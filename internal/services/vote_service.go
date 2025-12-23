@@ -45,6 +45,14 @@ func (s *VoteService) CanVote(electionUUID, userUUID uuid.UUID) error {
 	return nil
 }
 
+func (s *VoteService) HasVoted(electionUUID, userUUID uuid.UUID) (bool, error) {
+	var existingTracking models.UserVoteTracking
+	if err := s.db.Where("election_uuid = ? AND user_uuid = ?", electionUUID, userUUID).First(&existingTracking).Error; err == nil {
+		return true, nil
+	}
+	return false, nil
+}
+
 func (s *VoteService) Vote(electionUUID, userUUID, candidacyUUID uuid.UUID) error {
 	// Check if candidacy exists and belongs to the election
 	var candidacy models.Candidacy

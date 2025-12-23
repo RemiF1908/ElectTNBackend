@@ -134,6 +134,29 @@ func (s *ServerHandler) PostElectionCandidacy(c echo.Context, electionUuid types
 	}).VisitPostElectionCandidacyResponse(c.Response())
 }
 
+func (s *ServerHandler) GetElectionVote(c echo.Context, electionUuid types.UUID) error {
+	if s.voteService == nil {
+		return c.NoContent(http.StatusCreated)
+	}
+
+	// Get current user information from session (authentication already validated by middleware)
+	currentUserUUID, _ := s.GetUserFromSession(c)
+
+	// Check if user has voted for this election
+	hasVoted, err := s.voteService.HasVoted(electionUuid, currentUserUUID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, api.Error{
+			Error:   stringPtr("internal_error"),
+			Message: stringPtr("Failed to check if user has voted : " + err.Error()),
+		})
+	}
+
+	// Return response
+	return api.GetElectionVote200JSONResponse(api.GetElectionVote200JSONResponse{
+		HasVoted: &hasVoted,
+	}).VisitGetElectionVoteResponse(c.Response())
+}
+
 func (s *ServerHandler) PostElectionVote(c echo.Context, electionUuid types.UUID) error {
 	if s.voteService == nil {
 		return c.NoContent(http.StatusCreated)

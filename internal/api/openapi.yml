@@ -375,6 +375,41 @@ paths:
                 $ref: "#/components/schemas/Error"
 
   /elections/{electionUuid}/vote:
+    get:
+      summary: Get if the user has voted for this election
+      operationId: getElectionVote
+      security:
+        - SessionAuth: []
+      parameters:
+        - name: electionUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: User has voted for this election
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasVoted:
+                    type: boolean
+                    description: Whether the user has voted for this election
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Election not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
       summary: Vote for a candidate in an election
       operationId: postElectionVote

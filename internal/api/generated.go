@@ -245,6 +245,9 @@ type ClientInterface interface {
 	// GetElectionResults request
 	GetElectionResults(ctx context.Context, electionUuid openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetElectionVote request
+	GetElectionVote(ctx context.Context, electionUuid openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostElectionVoteWithBody request with any body
 	PostElectionVoteWithBody(ctx context.Context, electionUuid openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -448,6 +451,18 @@ func (c *Client) PostElectionOpen(ctx context.Context, electionUuid openapi_type
 
 func (c *Client) GetElectionResults(ctx context.Context, electionUuid openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetElectionResultsRequest(c.Server, electionUuid)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetElectionVote(ctx context.Context, electionUuid openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetElectionVoteRequest(c.Server, electionUuid)
 	if err != nil {
 		return nil, err
 	}
@@ -1029,6 +1044,40 @@ func NewGetElectionResultsRequest(server string, electionUuid openapi_types.UUID
 	return req, nil
 }
 
+// NewGetElectionVoteRequest generates requests for GetElectionVote
+func NewGetElectionVoteRequest(server string, electionUuid openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "electionUuid", runtime.ParamLocationPath, electionUuid)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/elections/%s/vote", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewPostElectionVoteRequest calls the generic PostElectionVote builder with application/json body
 func NewPostElectionVoteRequest(server string, electionUuid openapi_types.UUID, body PostElectionVoteJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -1193,6 +1242,9 @@ type ClientWithResponsesInterface interface {
 
 	// GetElectionResultsWithResponse request
 	GetElectionResultsWithResponse(ctx context.Context, electionUuid openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetElectionResultsResponse, error)
+
+	// GetElectionVoteWithResponse request
+	GetElectionVoteWithResponse(ctx context.Context, electionUuid openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetElectionVoteResponse, error)
 
 	// PostElectionVoteWithBodyWithResponse request with any body
 	PostElectionVoteWithBodyWithResponse(ctx context.Context, electionUuid openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostElectionVoteResponse, error)
@@ -1533,6 +1585,33 @@ func (r GetElectionResultsResponse) StatusCode() int {
 	return 0
 }
 
+type GetElectionVoteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		// HasVoted Whether the user has voted for this election
+		HasVoted *bool `json:"hasVoted,omitempty"`
+	}
+	JSON401 *Error
+	JSON404 *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r GetElectionVoteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetElectionVoteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type PostElectionVoteResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -1730,6 +1809,15 @@ func (c *ClientWithResponses) GetElectionResultsWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseGetElectionResultsResponse(rsp)
+}
+
+// GetElectionVoteWithResponse request returning *GetElectionVoteResponse
+func (c *ClientWithResponses) GetElectionVoteWithResponse(ctx context.Context, electionUuid openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetElectionVoteResponse, error) {
+	rsp, err := c.GetElectionVote(ctx, electionUuid, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetElectionVoteResponse(rsp)
 }
 
 // PostElectionVoteWithBodyWithResponse request with arbitrary body returning *PostElectionVoteResponse
@@ -2252,6 +2340,49 @@ func ParseGetElectionResultsResponse(rsp *http.Response) (*GetElectionResultsRes
 	return response, nil
 }
 
+// ParseGetElectionVoteResponse parses an HTTP response from a GetElectionVoteWithResponse call
+func ParseGetElectionVoteResponse(rsp *http.Response) (*GetElectionVoteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetElectionVoteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// HasVoted Whether the user has voted for this election
+			HasVoted *bool `json:"hasVoted,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParsePostElectionVoteResponse parses an HTTP response from a PostElectionVoteWithResponse call
 func ParsePostElectionVoteResponse(rsp *http.Response) (*PostElectionVoteResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -2365,6 +2496,9 @@ type ServerInterface interface {
 	// Get election results (admin only)
 	// (GET /elections/{electionUuid}/results)
 	GetElectionResults(ctx echo.Context, electionUuid openapi_types.UUID) error
+	// Get if the user has voted for this election
+	// (GET /elections/{electionUuid}/vote)
+	GetElectionVote(ctx echo.Context, electionUuid openapi_types.UUID) error
 	// Vote for a candidate in an election
 	// (POST /elections/{electionUuid}/vote)
 	PostElectionVote(ctx echo.Context, electionUuid openapi_types.UUID) error
@@ -2606,6 +2740,24 @@ func (w *ServerInterfaceWrapper) GetElectionResults(ctx echo.Context) error {
 	return err
 }
 
+// GetElectionVote converts echo context to params.
+func (w *ServerInterfaceWrapper) GetElectionVote(ctx echo.Context) error {
+	var err error
+	// ------------- Path parameter "electionUuid" -------------
+	var electionUuid openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "electionUuid", ctx.Param("electionUuid"), &electionUuid, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Invalid format for parameter electionUuid: %s", err))
+	}
+
+	ctx.Set(SessionAuthScopes, []string{})
+
+	// Invoke the callback with all the unmarshaled arguments
+	err = w.Handler.GetElectionVote(ctx, electionUuid)
+	return err
+}
+
 // PostElectionVote converts echo context to params.
 func (w *ServerInterfaceWrapper) PostElectionVote(ctx echo.Context) error {
 	var err error
@@ -2675,6 +2827,7 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 	router.GET(baseURL+"/elections/:electionUuid/live", wrapper.GetElectionLive)
 	router.POST(baseURL+"/elections/:electionUuid/open", wrapper.PostElectionOpen)
 	router.GET(baseURL+"/elections/:electionUuid/results", wrapper.GetElectionResults)
+	router.GET(baseURL+"/elections/:electionUuid/vote", wrapper.GetElectionVote)
 	router.POST(baseURL+"/elections/:electionUuid/vote", wrapper.PostElectionVote)
 	router.GET(baseURL+"/health", wrapper.GetHealth)
 
@@ -3120,6 +3273,44 @@ func (response GetElectionResults404JSONResponse) VisitGetElectionResultsRespons
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetElectionVoteRequestObject struct {
+	ElectionUuid openapi_types.UUID `json:"electionUuid"`
+}
+
+type GetElectionVoteResponseObject interface {
+	VisitGetElectionVoteResponse(w http.ResponseWriter) error
+}
+
+type GetElectionVote200JSONResponse struct {
+	// HasVoted Whether the user has voted for this election
+	HasVoted *bool `json:"hasVoted,omitempty"`
+}
+
+func (response GetElectionVote200JSONResponse) VisitGetElectionVoteResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetElectionVote401JSONResponse Error
+
+func (response GetElectionVote401JSONResponse) VisitGetElectionVoteResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetElectionVote404JSONResponse Error
+
+func (response GetElectionVote404JSONResponse) VisitGetElectionVoteResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type PostElectionVoteRequestObject struct {
 	ElectionUuid openapi_types.UUID `json:"electionUuid"`
 	Body         *PostElectionVoteJSONRequestBody
@@ -3227,6 +3418,9 @@ type StrictServerInterface interface {
 	// Get election results (admin only)
 	// (GET /elections/{electionUuid}/results)
 	GetElectionResults(ctx context.Context, request GetElectionResultsRequestObject) (GetElectionResultsResponseObject, error)
+	// Get if the user has voted for this election
+	// (GET /elections/{electionUuid}/vote)
+	GetElectionVote(ctx context.Context, request GetElectionVoteRequestObject) (GetElectionVoteResponseObject, error)
 	// Vote for a candidate in an election
 	// (POST /elections/{electionUuid}/vote)
 	PostElectionVote(ctx context.Context, request PostElectionVoteRequestObject) (PostElectionVoteResponseObject, error)
@@ -3605,6 +3799,31 @@ func (sh *strictHandler) GetElectionResults(ctx echo.Context, electionUuid opena
 	return nil
 }
 
+// GetElectionVote operation middleware
+func (sh *strictHandler) GetElectionVote(ctx echo.Context, electionUuid openapi_types.UUID) error {
+	var request GetElectionVoteRequestObject
+
+	request.ElectionUuid = electionUuid
+
+	handler := func(ctx echo.Context, request interface{}) (interface{}, error) {
+		return sh.ssi.GetElectionVote(ctx.Request().Context(), request.(GetElectionVoteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetElectionVote")
+	}
+
+	response, err := handler(ctx, request)
+
+	if err != nil {
+		return err
+	} else if validResponse, ok := response.(GetElectionVoteResponseObject); ok {
+		return validResponse.VisitGetElectionVoteResponse(ctx.Response())
+	} else if response != nil {
+		return fmt.Errorf("unexpected response type: %T", response)
+	}
+	return nil
+}
+
 // PostElectionVote operation middleware
 func (sh *strictHandler) PostElectionVote(ctx echo.Context, electionUuid openapi_types.UUID) error {
 	var request PostElectionVoteRequestObject
@@ -3662,35 +3881,36 @@ func (sh *strictHandler) GetHealth(ctx echo.Context) error {
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"l8t/AwAA//+g4A9QKy4AAA==",
+	"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",
+	"AP//e48SXfswAAA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
