@@ -94,8 +94,8 @@ paths:
       security:
         - SessionAuth: []
       responses:
-        "302":
-          description: Redirect to application after successful authentication
+        "200":
+          description: Logout successful
         "401":
           description: Not authenticated
           content:

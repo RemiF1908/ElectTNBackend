@@ -210,10 +210,8 @@ func (s *ServerHandler) GetAuthCallback(c echo.Context, params api.GetAuthCallba
 func (s *ServerHandler) GetAuthLogout(c echo.Context) error {
 	// Clear the session
 	_ = s.sessionStore.ClearSession(c) // Ignore errors in session clearing
-
-	// Redirect to application after successful authentication
-	redirectURL := s.config.AppURL
-	return c.Redirect(http.StatusFound, redirectURL)
+	
+	return api.GetAuthLogout200Response(api.GetAuthLogout200Response{}).VisitGetAuthLogoutResponse(c.Response())
 }
 
 func (s *ServerHandler) GetAuthMe(c echo.Context) error {
