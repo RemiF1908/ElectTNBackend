@@ -42,7 +42,13 @@ func NewServer(
 	// Middleware
 	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
-	e.Use(middleware.CORS())
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins:     []string{"http://localhost:*"}, // SvelteKit dev servers
+		AllowCredentials: true,                                                       // ✅ CRITICAL - allows cookies for auth
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Content-Type", "Authorization", "Cookie"}, // Explicit headers
+		MaxAge:           86400,                                               // 24 hours
+	}))
 
 	// Authentication and validation middleware (replaces old auth middleware)
 	// This integrates with oapi-codegen to handle authentication during request validation
