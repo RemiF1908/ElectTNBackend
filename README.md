@@ -113,16 +113,46 @@ go test -tags=integration ./test/...
 | `APP_MODE` | Yes | `development` | Application mode (`development`/`production`) |
 | `SESSION_SECRET` | Production | `dev-secret-key-change-in-production` | Session encryption key |
 | `DATABASE_URL` | Production | `postgres://...` | PostgreSQL connection string |
-| `GOOGLE_CLIENT_ID` | Production | - | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | Production | - | Google OAuth client secret |
+| `OIDC_ISSUER` | No | - | Enables generic OpenID Connect discovery (e.g. `https://id.example.com/realms/elections`) |
+| `OIDC_CLIENT_ID` | Production* | - | OIDC client ID |
+| `OIDC_CLIENT_SECRET` | Production* | - | OIDC client secret |
+| `OIDC_REDIRECT_URL` | No | `http://localhost:8080/auth/callback` | OIDC callback URL |
+| `OIDC_SCOPES` | No | `openid,email,profile` | Requested scopes |
+| `OIDC_PROVIDER_NAME` | No | `OIDC` | Provider name used in logs/errors |
+| `OIDC_USERINFO_URL` | No | from discovery | Override the userinfo endpoint |
+| `OIDC_AUTHORIZATION_URL` / `OIDC_TOKEN_URL` | No | from discovery | Override discovery endpoints |
+| `OIDC_DISCOVERY_URL` | No | `{issuer}/.well-known/openid-configuration` | Override discovery URL |
+| `OIDC_AUTH_STYLE` | No | `auto` | Token endpoint auth: `auto`, `in_header`, `in_params` |
+| `OIDC_REQUIRE_VERIFIED_EMAIL` | No | `false` | Reject logins when the provider omits `email_verified` |
+| `GOOGLE_CLIENT_ID` | Production* | - | Legacy Google client ID (used when `OIDC_ISSUER` is empty) |
+| `GOOGLE_CLIENT_SECRET` | Production* | - | Legacy Google client secret |
 | `PORT` | No | `8080` | Server port |
+
+\* Production requires either the `OIDC_*` pair or the legacy `GOOGLE_*` pair.
+
+### Using another OIDC provider
+
+Set `OIDC_ISSUER` (and optionally the discovery/endpoint overrides) and the
+service automatically uses that provider. `GET /auth/login` starts the
+configured provider flow. Leaving `OIDC_ISSUER` empty preserves the legacy
+Google configuration.
+
+Example with Keycloak:
+
+```bash
+OIDC_ISSUER=https://keycloak.example.com/realms/elections
+OIDC_CLIENT_ID=elections-api
+OIDC_CLIENT_SECRET=secret
+OIDC_REDIRECT_URL=https://api.example.com/auth/callback
+OIDC_PROVIDER_NAME=Keycloak
+```
 
 ## 📦 API Endpoints
 
 ### Authentication
-- `GET /auth/google` - Start OAuth2 flow
-- `POST /auth/callback` - OAuth2 callback
-- `POST /auth/logout` - Logout user
+- `GET /auth/login` - Start the configured OAuth2/OIDC flow
+- `GET /auth/callback` - OAuth2/OIDC callback
+- `GET /auth/logout` - Logout user
 - `GET /auth/me` - Get current user
 
 ### Elections

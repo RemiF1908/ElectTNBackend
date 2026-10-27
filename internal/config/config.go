@@ -15,6 +15,13 @@ type Config struct {
 	SessionSecret string
 	AppURL        string
 	OAuthConfig   *oauth2.Config
+
+	// OIDC/OAuth settings
+	ProviderName         string
+	Issuer               string
+	UserInfoURL          string
+	RequireVerifiedEmail bool
+	AuthCodeOptions      []oauth2.AuthCodeOption
 }
 
 // LoadConfig loads configuration from environment variables
@@ -51,31 +58,22 @@ func Load() (*Config, error) {
 		port = "8080"
 	}
 
-	// Google OAuth configuration
-	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
-	googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
-	if mode == "production" {
-		if googleClientID == "" {
-			return nil, fmt.Errorf("GOOGLE_CLIENT_ID environment variable is required in production mode")
-		}
-		if googleClientSecret == "" {
-			return nil, fmt.Errorf("GOOGLE_CLIENT_SECRET environment variable is required in production mode")
-		}
-	}
-
-	redirectURL := os.Getenv("GOOGLE_REDIRECT_URL")
-	if redirectURL == "" {
-		redirectURL = fmt.Sprintf("http://localhost:%s/auth/callback", port)
+	// OIDC/OAuth configuration (generic OIDC when OIDC_ISSUER is set,
+	// otherwise legacy Google configuration via GOOGLE_*)
+	oauthSettings, err := loadOAuthSettings(mode, port)
+	if err != nil {
+		return nil, err
 	}
 
 	oauthConfig := &oauth2.Config{
-		ClientID:     googleClientID,
-		ClientSecret: googleClientSecret,
-		RedirectURL:  redirectURL,
-		Scopes:       []string{"email", "profile"},
+		ClientID:     oauthSettings.clientID,
+		ClientSecret: oauthSettings.clientSecret,
+		RedirectURL:  oauthSettings.redirectURL,
+		Scopes:       oauthSettings.scopes,
 		Endpoint: oauth2.Endpoint{
-			AuthURL:  "https://accounts.google.com/o/oauth2/auth",
-			TokenURL: "https://oauth2.googleapis.com/token",
+			AuthURL:   oauthSettings.authURL,
+			TokenURL:  oauthSettings.tokenURL,
+			AuthStyle: oauthSettings.authStyle,
 		},
 	}
 
@@ -85,12 +83,17 @@ func Load() (*Config, error) {
 	}
 
 	config := &Config{
-		Mode:          mode,
-		Port:          port,
-		AppURL:        AppURL,
-		DatabaseURL:   databaseURL,
-		SessionSecret: sessionSecret,
-		OAuthConfig:   oauthConfig,
+		Mode:                 mode,
+		Port:                 port,
+		AppURL:               AppURL,
+		DatabaseURL:          databaseURL,
+		SessionSecret:        sessionSecret,
+		OAuthConfig:          oauthConfig,
+		ProviderName:         oauthSettings.providerName,
+		Issuer:               oauthSettings.issuer,
+		UserInfoURL:          oauthSettings.userInfoURL,
+		RequireVerifiedEmail: oauthSettings.requireVerifiedEmail,
+		AuthCodeOptions:      oauthSettings.authCodeOptions,
 	}
 
 	// Validate configuration
@@ -115,13 +118,13 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("cannot use default development database URL in production mode")
 		}
 		if c.OAuthConfig.ClientID == "" {
-			return fmt.Errorf("Google OAuth Client ID is required in production mode")
+			return fmt.Errorf("OAuth Client ID is required in production mode")
 		}
 		if c.OAuthConfig.ClientSecret == "" {
-			return fmt.Errorf("Google OAuth Client Secret is required in production mode")
+			return fmt.Errorf("OAuth Client Secret is required in production mode")
 		}
 		if c.OAuthConfig.RedirectURL == "" {
-			return fmt.Errorf("Google OAuth Redirect URL is required in production mode")
+			return fmt.Errorf("OAuth Redirect URL is required in production mode")
 		}
 		if c.AppURL == "" {
 			return fmt.Errorf("APP_URL is required in production mode")

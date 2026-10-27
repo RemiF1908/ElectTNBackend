@@ -27,13 +27,13 @@ paths:
                     type: string
                     format: date-time
 
-  /auth/google:
+  /auth/login:
     get:
-      summary: Start OAuth2 flow with Google
-      operationId: getAuthGoogle
+      summary: Start the configured OAuth2/OIDC flow
+      operationId: getAuthLogin
       responses:
         "302":
-          description: Redirect to Google OAuth
+          description: Redirect to the configured OAuth2/OIDC provider
         "500":
           description: Internal server error
           content:
@@ -43,7 +43,7 @@ paths:
 
   /auth/callback:
     get:
-      summary: OAuth2 callback from Google
+      summary: OAuth2/OIDC callback from the configured provider
       operationId: getAuthCallback
       parameters:
         - name: code
